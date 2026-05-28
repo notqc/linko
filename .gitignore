@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Word temp files
+~$*.docx
+*.docx
+
+# Flutter metadata
+.metadata
