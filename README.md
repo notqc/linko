@@ -1,4 +1,4 @@
-# ✈️ SkyLink — Offline Flight Chat App
+# ✈️ SkyLink - Offline Flight Chat App
 
 Chat with friends on the same flight via Bluetooth & WiFi Direct.
 **Zero internet required.** Works at 35,000 ft.
@@ -31,7 +31,7 @@ skylink/
 
 ---
 
-## 🛠️ STEP 1 — Install Flutter
+## 🛠️ STEP 1 - Install Flutter
 
 ### On macOS
 ```bash
@@ -67,7 +67,7 @@ flutter doctor
 
 ---
 
-## 🛠️ STEP 2 — Install Android Studio (for Android builds)
+## 🛠️ STEP 2 - Install Android Studio (for Android builds)
 
 1. Download from https://developer.android.com/studio
 2. Open Android Studio → SDK Manager → install:
@@ -78,7 +78,7 @@ flutter doctor
 
 ---
 
-## 🛠️ STEP 3 — Install Xcode (for iOS builds — Mac only)
+## 🛠️ STEP 3 - Install Xcode (for iOS builds - Mac only)
 
 ```bash
 # Install Xcode from the Mac App Store, then:
@@ -95,7 +95,7 @@ brew install cocoapods
 
 ---
 
-## 🛠️ STEP 4 — Create the Flutter Project
+## 🛠️ STEP 4 - Create the Flutter Project
 
 ```bash
 # Create project
@@ -107,7 +107,7 @@ cd skylink
 
 ---
 
-## 🛠️ STEP 5 — Replace All Project Files
+## 🛠️ STEP 5 - Replace All Project Files
 
 Copy all files from this repo into your `skylink/` folder,
 **overwriting** the defaults Flutter created.
@@ -128,7 +128,7 @@ ios/Runner/Info.plist
 
 ---
 
-## 🛠️ STEP 6 — Install Dependencies
+## 🛠️ STEP 6 - Install Dependencies
 
 ```bash
 flutter pub get
@@ -138,7 +138,7 @@ You should see all packages resolve successfully.
 
 ---
 
-## 🛠️ STEP 7 — Android Setup
+## 🛠️ STEP 7 - Android Setup
 
 ### 7a. Set the App ID
 Open `android/app/build.gradle` and confirm:
@@ -174,7 +174,7 @@ implementation 'androidx.multidex:multidex:2.0.1'
 
 ---
 
-## 🛠️ STEP 8 — iOS Setup
+## 🛠️ STEP 8 - iOS Setup
 
 ### 8a. Install CocoaPods dependencies
 ```bash
@@ -202,7 +202,7 @@ In Xcode:
 
 ---
 
-## 🛠️ STEP 9 — Run the App
+## 🛠️ STEP 9 - Run the App
 
 ### On a physical Android device:
 ```bash
@@ -239,16 +239,16 @@ flutter build ipa
 
 ---
 
-## 📱 STEP 10 — How to Use SkyLink
+## 📱 STEP 10 - How to Use SkyLink
 
-1. **All friends install the app** — share the `.apk` on Android,
+1. **All friends install the app** - share the `.apk` on Android,
    or use TestFlight/Ad Hoc on iOS
 2. **Everyone opens SkyLink** before boarding or during the flight
 3. **Enter your name and pick an emoji avatar**
 4. **The app automatically scans** for nearby SkyLink users
    via Bluetooth + WiFi Direct (no internet needed)
 5. **Tap a friend's name** to connect → then **Chat!**
-6. All 5 friends can chat individually with each other —
+6. All 5 friends can chat individually with each other -
    the app supports up to ~8 simultaneous peers
 
 ---
@@ -256,9 +256,9 @@ flutter build ipa
 ## ⚡ How It Works Technically
 
 ```
-Friend A's Phone ←—Bluetooth/WiFi Direct—→ Friend B's Phone
-                                         ←—→ Friend C's Phone
-                                         ←—→ Friend D's Phone
+Friend A's Phone ←-Bluetooth/WiFi Direct-→ Friend B's Phone
+                                         ←-→ Friend C's Phone
+                                         ←-→ Friend D's Phone
 
 Protocol: Google Nearby Connections API (P2P_CLUSTER strategy)
 Transport: Bluetooth Classic + BLE + WiFi Direct (auto-selects best)
@@ -287,7 +287,7 @@ Encryption: Built-in by Nearby Connections API
 
 | Package | Purpose |
 |---|---|
-| `nearby_connections` | Core P2P — Bluetooth + WiFi Direct |
+| `nearby_connections` | Core P2P - Bluetooth + WiFi Direct |
 | `permission_handler` | Request BT/Location permissions at runtime |
 | `google_fonts` | Outfit font for the UI |
 | `flutter_animate` | Smooth animations and transitions |
