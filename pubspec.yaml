@@ -1,8 +1,8 @@
-name: skylink
-description: Offline P2P chat app for flights using Nearby Connections
+name: linko
+description: Offline P2P chat with RSA encryption, PIN verification and mesh relay.
+version: 2.0.0+1
 
 publish_to: 'none'
-version: 1.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -17,6 +17,11 @@ dependencies:
   flutter_animate: ^4.5.0
   google_fonts: ^6.2.1
   permission_handler: ^11.3.1
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  pointycastle: ^3.9.1
+  convert: ^3.1.1
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -25,3 +30,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+

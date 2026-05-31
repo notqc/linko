@@ -2,9 +2,10 @@ class Message {
   final String id;
   final String senderId;
   final String senderName;
-  final String content;
+  final String content;       // always decrypted when stored
   final DateTime timestamp;
   final bool isMe;
+  final bool isRelayed;
   final MessageStatus status;
 
   Message({
@@ -14,42 +15,57 @@ class Message {
     required this.content,
     required this.timestamp,
     required this.isMe,
+    this.isRelayed = false,
     this.status = MessageStatus.sent,
   });
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'senderId': senderId,
-        'senderName': senderName,
-        'content': content,
-        'timestamp': timestamp.millisecondsSinceEpoch,
-      };
+  // Wire format — content is RSA-encrypted ciphertext
+  Map<String, dynamic> toWireJson(String encryptedContent) => {
+    'id': id,
+    'senderId': senderId,
+    'senderName': senderName,
+    'content': encryptedContent,
+    'timestamp': timestamp.millisecondsSinceEpoch,
+    'isRelayed': isRelayed,
+  };
 
-  factory Message.fromJson(Map<String, dynamic> json, String myId) => Message(
-        id: json['id'],
-        senderId: json['senderId'],
-        senderName: json['senderName'],
-        content: json['content'],
-        timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp']),
-        isMe: json['senderId'] == myId,
-        status: MessageStatus.received,
-      );
+  // Relay envelope — wraps the full encrypted payload
+  static Map<String, dynamic> toRelayEnvelope({
+    required String destinationId,
+    required String originId,
+    required Map<String, dynamic> payload,
+    required int ttl,
+    required List<String> visited,
+  }) => {
+    'type': 'relay',
+    'destinationId': destinationId,
+    'originId': originId,
+    'ttl': ttl,
+    'visited': visited,
+    'payload': payload,
+  };
 }
 
 enum MessageStatus { sending, sent, received, failed }
 
 class Peer {
   final String id;
-  final String name;
-  final String emoji;
+  String name;
+  String emoji;
   bool isConnected;
+  bool isPinVerified;
   List<Message> messages;
+  String? publicKeyPem;       // their RSA public key
+  String? pendingPin;         // PIN shown during pairing
 
   Peer({
     required this.id,
     required this.name,
     required this.emoji,
     this.isConnected = false,
+    this.isPinVerified = false,
+    this.publicKeyPem,
+    this.pendingPin,
     List<Message>? messages,
   }) : messages = messages ?? [];
 
@@ -57,5 +73,20 @@ class Peer {
     final parts = name.split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name.substring(0, name.length >= 2 ? 2 : 1).toUpperCase();
+  }
+
+  // emoji based on name hash for consistency
+  static String emojiForName(String name) {
+    const emojis = [
+  // Animals
+  '🦁','🐯','🐻','🦊','🐺','🐗','🦝','🦨','🦦','🦥','🐼','🐨',
+  // Birds
+  '🦅','🦆','🦉','🦚','🦜','🐦','🕊️','🦩','🦢','🐧','🦤','🪶',
+  // Insects
+  '🦋','🐝','🪲','🐛','🦗','🪳','🐞','🦟','🪰','🦂','🐜','🪱',
+  // Flowers
+  '🌸','🌺','🌻','🌹','🌷','💐','🪷','🌼','🌸','🏵️','🪻','🌱',
+];
+    return emojis[name.hashCode.abs() % emojis.length];
   }
 }

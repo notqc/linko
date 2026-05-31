@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/message.dart';
 import '../services/nearby_service.dart';
+import '../widgets/pin_dialog.dart';
 import 'chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,99 +17,108 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  final List<Peer> _peers = [];
-  bool _isScanning = false;
-  late AnimationController _pulseController;
+  final List<Peer>       _nearbyPeers  = [];
+  List<Peer>             _knownPeers   = [];
+  bool                   _isScanning   = false;
   final Map<String, int> _unreadCounts = {};
+  late AnimationController _pulseCtrl;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))
+      ..repeat(reverse: true);
     _setupCallbacks();
     _requestPermissionsAndStart();
+    _loadKnownPeers();
+  }
+
+  Future<void> _loadKnownPeers() async {
+    final peers = await widget.nearbyService.loadKnownPeers();
+    if (mounted) setState(() => _knownPeers = peers);
   }
 
   void _setupCallbacks() {
-    widget.nearbyService.onPeerFound = (peer) {
-      if (mounted) setState(() => _peers.add(peer));
+    final ns = widget.nearbyService;
+    ns.onPeerFound = (peer) {
+      if (mounted && !_nearbyPeers.any((p) => p.id == peer.id)) {
+        setState(() => _nearbyPeers.add(peer));
+      }
     };
-    widget.nearbyService.onPeerLost = (id) {
-      if (mounted) setState(() => _peers.removeWhere((p) => p.id == id));
+    ns.onPeerLost = (id) {
+      if (mounted) setState(() => _nearbyPeers.removeWhere((p) => p.id == id));
     };
-    widget.nearbyService.onPeerConnected = (peer) {
-      if (mounted) setState(() {});
-      HapticFeedback.mediumImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${peer.emoji} ${peer.name} connected!'),
-          backgroundColor: const Color(0xFF6C63FF),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ns.onPinRequired = (peerId, peerName, pin) {
+      if (!mounted) return;
+      final peer = ns.peers[peerId];
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PinDialog(
+          peerName:  peerName,
+          peerEmoji: peer?.emoji ?? '👤',
+          pin:       pin,
+          onConfirm: () {
+            Navigator.pop(context);
+            ns.confirmPin(peerId);
+            HapticFeedback.mediumImpact();
+          },
+          onReject: () {
+            Navigator.pop(context);
+            ns.rejectPin(peerId);
+          },
         ),
       );
     };
-    widget.nearbyService.onPeerDisconnected = (id) {
+    ns.onPeerConnected = (peer) {
+      if (mounted) setState(() {});
+      _showSnack('${peer.emoji} ${peer.name} connected!', const Color(0xFF6C63FF));
+    };
+    ns.onPeerDisconnected = (id) {
       if (mounted) setState(() {});
     };
-    widget.nearbyService.onMessageReceived = (peerId, message) {
-      if (mounted) {
-        setState(() {
-          _unreadCounts[peerId] = (_unreadCounts[peerId] ?? 0) + 1;
-        });
-        HapticFeedback.lightImpact();
-      }
+    ns.onPinRejected = (id) {
+      _showSnack('Connection rejected', Colors.red.shade700);
     };
+    ns.onMessageReceived = (peerId, message) {
+      if (mounted) setState(() => _unreadCounts[peerId] = (_unreadCounts[peerId] ?? 0) + 1);
+      HapticFeedback.lightImpact();
+    };
+  }
+
+  void _showSnack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: GoogleFonts.outfit()),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
   }
 
   Future<void> _requestPermissionsAndStart() async {
-    final permissions = [
-      Permission.bluetooth,
-      Permission.bluetoothAdvertise,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.locationWhenInUse,
-      Permission.nearbyWifiDevices,
-    ];
-    await permissions.request();
-    await _startScanning();
-  }
-
-  Future<void> _startScanning() async {
+    await [
+      Permission.bluetooth, Permission.bluetoothAdvertise,
+      Permission.bluetoothConnect, Permission.bluetoothScan,
+      Permission.locationWhenInUse, Permission.nearbyWifiDevices,
+    ].request();
     setState(() => _isScanning = true);
-    final success = await widget.nearbyService.startHosting();
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Could not start scanning. Check permissions.'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+    final ok = await widget.nearbyService.startHosting();
+    if (!ok && mounted) {
       setState(() => _isScanning = false);
+      _showSnack('Could not start scanning — check permissions', Colors.red.shade700);
     }
   }
 
   void _openChat(Peer peer) {
     setState(() => _unreadCounts.remove(peer.id));
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          peer: peer,
-          nearbyService: widget.nearbyService,
-        ),
-      ),
-    );
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => ChatScreen(peer: peer, nearbyService: widget.nearbyService)));
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _pulseCtrl.dispose();
     widget.nearbyService.stopAll();
     super.dispose();
   }
@@ -118,226 +128,154 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildScanStatus(),
-            Expanded(child: _buildPeerList()),
-          ],
-        ),
+        child: Column(children: [
+          _buildHeader(),
+          Expanded(child: _buildBody()),
+        ]),
       ),
     );
   }
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+      child: Row(children: [
+        Container(
+          width: 42, height: 42,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
                 colors: [Color(0xFF6C63FF), Color(0xFF3ECFCF)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(child: Text('✈️', style: TextStyle(fontSize: 20))),
+                begin: Alignment.topLeft, end: Alignment.bottomRight),
+            borderRadius: BorderRadius.circular(14),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SkyLink',
-                style: GoogleFonts.outfit(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Text(
-                '${widget.nearbyService.myEmoji} ${widget.nearbyService.myName}',
-                style: GoogleFonts.outfit(
-                  color: Colors.white38,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Container(
+          child: const Center(child: Text('💬', style: TextStyle(fontSize: 22))),
+        ),
+        const SizedBox(width: 12),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Linko', style: GoogleFonts.outfit(
+              color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+          Text('${widget.nearbyService.myEmoji} ${widget.nearbyService.myName}',
+              style: GoogleFonts.outfit(color: Colors.white38, fontSize: 12)),
+        ]),
+        const Spacer(),
+        // Scanning indicator
+        AnimatedBuilder(
+          animation: _pulseCtrl,
+          builder: (_, __) => Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0xFF1E2435),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              children: [
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (_, __) => Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _isScanning
-                          ? Color.lerp(
-                              const Color(0xFF3ECFCF),
-                              const Color(0xFF6C63FF),
-                              _pulseController.value,
-                            )
-                          : Colors.grey,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _isScanning ? 'Scanning' : 'Idle',
-                  style: GoogleFonts.outfit(
-                    color: Colors.white60,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+            child: Row(children: [
+              Container(width: 8, height: 8,
+                decoration: BoxDecoration(
+                  color: _isScanning
+                      ? Color.lerp(const Color(0xFF3ECFCF), const Color(0xFF6C63FF), _pulseCtrl.value)
+                      : Colors.grey,
+                  shape: BoxShape.circle,
+                )),
+              const SizedBox(width: 6),
+              Text(_isScanning ? 'Scanning' : 'Idle',
+                style: GoogleFonts.outfit(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w600)),
+            ]),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
-  Widget _buildScanStatus() {
+  Widget _buildBody() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+      children: [
+        // Nearby section
+        _sectionLabel('NEARBY', Icons.radar_rounded),
+        const SizedBox(height: 12),
+        if (_nearbyPeers.isEmpty) _emptyNearby() else ..._nearbyPeers.asMap().entries.map((e) =>
+          _PeerCard(
+            peer: e.value,
+            unreadCount: _unreadCounts[e.value.id] ?? 0,
+            onTap: () async {
+              if (!e.value.isConnected) {
+                HapticFeedback.mediumImpact();
+                await widget.nearbyService.connectToPeer(e.value.id);
+              } else if (e.value.isPinVerified) {
+                _openChat(e.value);
+              }
+            },
+          ).animate().fadeIn(delay: (e.key * 70).ms).slideX(begin: 0.2, end: 0)
+        ),
+
+        // Known peers (history)
+        if (_knownPeers.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          _sectionLabel('RECENT CHATS', Icons.history_rounded),
+          const SizedBox(height: 12),
+          ..._knownPeers.map((peer) {
+            final live = _nearbyPeers.firstWhere(
+                (p) => p.id == peer.id, orElse: () => peer);
+            return _PeerCard(
+              peer: live,
+              unreadCount: _unreadCounts[peer.id] ?? 0,
+              isHistory: true,
+              onTap: () => live.isConnected && live.isPinVerified
+                  ? _openChat(live) : null,
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _sectionLabel(String label, IconData icon) {
+    return Row(children: [
+      Icon(icon, color: const Color(0xFF6C63FF), size: 16),
+      const SizedBox(width: 6),
+      Text(label, style: GoogleFonts.outfit(
+          color: Colors.white38, fontSize: 11,
+          fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+    ]);
+  }
+
+  Widget _emptyNearby() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _peers.isEmpty ? 'Searching for crewmates...' : 'Nearby Passengers',
-            style: GoogleFonts.outfit(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Column(children: [
+        AnimatedBuilder(
+          animation: _pulseCtrl,
+          builder: (_, __) => Container(
+            width: 100, height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Color.lerp(
+                  const Color(0xFF6C63FF).withOpacity(0.2),
+                  const Color(0xFF3ECFCF).withOpacity(0.2),
+                  _pulseCtrl.value,
+                )!, width: 2,
+              ),
             ),
-          ).animate().fadeIn(),
-          const SizedBox(height: 4),
-          Text(
-            _peers.isEmpty
-                ? 'Make sure your friends also have SkyLink open'
-                : '${_peers.length} found · tap to connect & chat',
-            style: GoogleFonts.outfit(color: Colors.white38, fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPeerList() {
-    if (_peers.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _pulseController,
-              builder: (_, __) => Container(
-                width: 120,
-                height: 120,
+            child: Center(
+              child: Container(
+                width: 60, height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Color.lerp(
-                      const Color(0xFF6C63FF).withOpacity(0.3),
-                      const Color(0xFF3ECFCF).withOpacity(0.3),
-                      _pulseController.value,
-                    )!,
-                    width: 2,
-                  ),
+                  gradient: LinearGradient(colors: [
+                    Color.lerp(const Color(0xFF6C63FF), const Color(0xFF3ECFCF), _pulseCtrl.value)!,
+                    const Color(0xFF3ECFCF),
+                  ]),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Color.lerp(
-                          const Color(0xFF6C63FF).withOpacity(0.5),
-                          const Color(0xFF3ECFCF).withOpacity(0.5),
-                          _pulseController.value,
-                        )!,
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Color.lerp(
-                                const Color(0xFF6C63FF),
-                                const Color(0xFF3ECFCF),
-                                _pulseController.value,
-                              )!,
-                              const Color(0xFF3ECFCF),
-                            ],
-                          ),
-                        ),
-                        child: const Center(
-                          child: Text('📡', style: TextStyle(fontSize: 22)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                child: const Center(child: Text('📡', style: TextStyle(fontSize: 26))),
               ),
             ),
-            const SizedBox(height: 28),
-            Text(
-              'No one nearby yet',
-              style: GoogleFonts.outfit(
-                color: Colors.white54,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Ask your friends to open SkyLink',
-              style: GoogleFonts.outfit(color: Colors.white24, fontSize: 13),
-            ),
-          ],
+          ),
         ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-      itemCount: _peers.length,
-      itemBuilder: (context, index) {
-        final peer = _peers[index];
-        final unread = _unreadCounts[peer.id] ?? 0;
-        return _PeerCard(
-          peer: peer,
-          unreadCount: unread,
-          onTap: () async {
-            if (!peer.isConnected) {
-              HapticFeedback.mediumImpact();
-              await widget.nearbyService.connectToPeer(peer.id);
-            } else {
-              _openChat(peer);
-            }
-          },
-        ).animate().fadeIn(delay: (index * 80).ms).slideX(begin: 0.2, end: 0);
-      },
+        const SizedBox(height: 16),
+        Text('Looking for people nearby...', style: GoogleFonts.outfit(color: Colors.white54, fontSize: 15)),
+        const SizedBox(height: 6),
+        Text('Make sure friends have Linko open', style: GoogleFonts.outfit(color: Colors.white24, fontSize: 12)),
+      ]),
     );
   }
 }
@@ -345,144 +283,98 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 class _PeerCard extends StatelessWidget {
   final Peer peer;
   final int unreadCount;
-  final VoidCallback onTap;
+  final bool isHistory;
+  final VoidCallback? onTap;
 
   const _PeerCard({
     required this.peer,
     required this.unreadCount,
-    required this.onTap,
+    this.isHistory = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final connected  = peer.isConnected;
+    final verified   = peer.isPinVerified;
+
+    String statusText;
+    Color  statusColor;
+    if (!connected)       { statusText = isHistory ? 'Not nearby' : 'Tap to connect'; statusColor = Colors.white24; }
+    else if (!verified)   { statusText = 'Verifying PIN...'; statusColor = Colors.amber; }
+    else                  { statusText = 'Connected · tap to chat'; statusColor = const Color(0xFF3ECFCF); }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(18),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: const Color(0xFF141828),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: peer.isConnected
-                ? const Color(0xFF6C63FF).withOpacity(0.4)
+            color: verified
+                ? const Color(0xFF6C63FF).withOpacity(0.35)
                 : Colors.white.withOpacity(0.06),
             width: 1.5,
           ),
         ),
-        child: Row(
-          children: [
-            Stack(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: peer.isConnected
-                          ? [const Color(0xFF6C63FF), const Color(0xFF3ECFCF)]
-                          : [const Color(0xFF1E2435), const Color(0xFF252B40)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Text(peer.emoji, style: const TextStyle(fontSize: 26)),
-                  ),
+        child: Row(children: [
+          Stack(children: [
+            Container(
+              width: 50, height: 50,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: verified
+                    ? [const Color(0xFF6C63FF), const Color(0xFF3ECFCF)]
+                    : [const Color(0xFF1E2435), const Color(0xFF252B40)],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
                 ),
-                if (peer.isConnected)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3ECFCF),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF141828),
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    peer.name,
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: peer.isConnected
-                              ? const Color(0xFF3ECFCF)
-                              : Colors.white24,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        peer.isConnected ? 'Connected · tap to chat' : 'Tap to connect',
-                        style: GoogleFonts.outfit(
-                          color: peer.isConnected
-                              ? const Color(0xFF3ECFCF)
-                              : Colors.white38,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(16),
               ),
+              child: Center(child: Text(peer.emoji, style: const TextStyle(fontSize: 24))),
             ),
-            if (unreadCount > 0)
-              Container(
-                width: 26,
-                height: 26,
+            if (connected) Positioned(
+              right: 0, bottom: 0,
+              child: Container(
+                width: 13, height: 13,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6C63FF), Color(0xFF3ECFCF)],
-                  ),
-                  borderRadius: BorderRadius.circular(13),
+                  color: verified ? const Color(0xFF3ECFCF) : Colors.amber,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF141828), width: 2),
                 ),
-                child: Center(
-                  child: Text(
-                    unreadCount > 9 ? '9+' : '$unreadCount',
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              )
-            else
-              Icon(
-                peer.isConnected ? Icons.chat_bubble_rounded : Icons.bluetooth_rounded,
-                color: peer.isConnected
-                    ? const Color(0xFF6C63FF)
-                    : Colors.white24,
-                size: 20,
               ),
-          ],
-        ),
+            ),
+          ]),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(peer.name,
+              style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Row(children: [
+              Container(width: 6, height: 6,
+                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
+              const SizedBox(width: 5),
+              Text(statusText,
+                style: GoogleFonts.outfit(color: statusColor, fontSize: 11, fontWeight: FontWeight.w500)),
+            ]),
+          ])),
+          if (unreadCount > 0)
+            Container(
+              width: 26, height: 26,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [Color(0xFF6C63FF), Color(0xFF3ECFCF)]),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Center(child: Text(unreadCount > 9 ? '9+' : '$unreadCount',
+                  style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
+            )
+          else
+            Icon(
+              verified ? Icons.chat_bubble_rounded : Icons.lock_rounded,
+              color: verified ? const Color(0xFF6C63FF) : Colors.white24, size: 18,
+            ),
+        ]),
       ),
     );
   }

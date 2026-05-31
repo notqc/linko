@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace "com.skylink.skylink"
+    namespace "com.linko.chat"
     compileSdk 36
     ndkVersion flutter.ndkVersion
 
@@ -19,11 +19,12 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.skylink.skylink"
-        minSdkVersion flutter.minSdkVersion
-        targetSdk 35
+        applicationId "com.linko.chat"
+        minSdk 21
+        targetSdk 36
         versionCode 1
-        versionName "1.0"
+        versionName "2.0"
+        multiDexEnabled true
     }
 
     buildTypes {
@@ -41,4 +42,5 @@ flutter {
 
 dependencies {
     implementation 'com.google.android.gms:play-services-nearby:19.1.0'
+    implementation 'androidx.multidex:multidex:2.0.1'
 }
