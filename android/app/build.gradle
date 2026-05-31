@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace "com.linko.chat"
+    namespace "com.skylink.skylink"
     compileSdk 36
     ndkVersion flutter.ndkVersion
 
@@ -19,8 +19,8 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.linko.chat"
-        minSdk 21
+        applicationId "com.skylink.skylink"
+        minSdkVersion flutter.minSdkVersion
         targetSdk 36
         versionCode 1
         versionName "2.0"

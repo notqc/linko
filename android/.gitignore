@@ -12,10 +12,3 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
-
-# Word temp files
-~$*.docx
-*.docx
-
-# Flutter metadata
-.metadata

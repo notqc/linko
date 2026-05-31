@@ -1,40 +1,28 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Internet (not used for chat, needed by some Flutter plugins) -->
     <uses-permission android:name="android.permission.INTERNET"/>
-
-    <!-- Bluetooth Classic -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
-
-    <!-- Bluetooth for Android 12+ -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
-
-    <!-- WiFi Direct / Nearby -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation"/>
-
-    <!-- Location (required by Nearby on older Android) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-
-    <!-- Vibration -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- Hardware features -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
     <uses-feature android:name="android.hardware.wifi.direct" android:required="false"/>
 
     <application
-        android:label="SkyLink"
+        android:label="Linko"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false">
@@ -56,16 +44,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2"/>
+        <meta-data android:name="flutterEmbedding" android:value="2"/>
     </application>
-
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
-        </intent>
-    </queries>
 </manifest>
